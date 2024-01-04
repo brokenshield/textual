@@ -84,6 +84,13 @@ class XTermParser(Parser[events.Event]):
             return event
         return None
 
+    _reissued_sequence_debug_book: Callable[[str], None] | None = None
+    """INTERNAL USE ONLY!
+
+    If this property is set to a callable, it will be called *instead* of
+    the reissued sequence being emitted as key events.
+    """
+
     def parse(self, on_token: TokenCallback) -> Generator[Awaitable, str, None]:
         ESC = "\x1b"
         read1 = self.read1
@@ -94,6 +101,9 @@ class XTermParser(Parser[events.Event]):
         use_prior_escape = False
 
         def reissue_sequence_as_keys(reissue_sequence: str) -> None:
+            if self._reissued_sequence_debug_book is not None:
+                self._reissued_sequence_debug_book(reissue_sequence)
+                return
             for character in reissue_sequence:
                 key_events = sequence_to_key_events(character)
                 for event in key_events:
@@ -233,10 +243,20 @@ class XTermParser(Parser[events.Event]):
             Keys
         """
         keys = ANSI_SEQUENCES_KEYS.get(sequence)
-        if keys is not None:
+        if isinstance(keys, tuple):
+            # If the sequence mapped to a tuple, then it's values from the
+            # `Keys` enum. Raise key events from what we find in the tuple.
             for key in keys:
                 yield events.Key(key.value, sequence if len(sequence) == 1 else None)
-        elif len(sequence) == 1:
+            return
+        # If keys is a string, the intention is that it's a mapping to a
+        # character, which should really be treated as the sequence for the
+        # purposes of the next step...
+        if isinstance(keys, str):
+            sequence = keys
+        # If the sequence is a single character, attempt to process it as a
+        # key.
+        if len(sequence) == 1:
             try:
                 if not sequence.isalnum():
                     name = _character_to_key(sequence)

@@ -28,7 +28,7 @@ The example below shows each placeholder variant.
 
 === "placeholder.tcss"
 
-    ```sass
+    ```css
     --8<-- "docs/examples/widgets/placeholder.tcss"
     ```
 
@@ -41,7 +41,15 @@ The example below shows each placeholder variant.
 
 ## Messages
 
-This widget sends no messages.
+This widget posts no messages.
+
+## Bindings
+
+This widget has no bindings.
+
+## Component Classes
+
+This widget has no component classes.
 
 ---
 

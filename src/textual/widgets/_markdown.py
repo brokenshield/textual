@@ -1,27 +1,31 @@
 from __future__ import annotations
 
 from pathlib import Path, PurePath
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from rich import box
 from rich.style import Style
-from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from typing_extensions import TypeAlias
 
 from .._slug import TrackedSlugs
 from ..app import ComposeResult
+from ..await_complete import AwaitComplete
 from ..containers import Horizontal, Vertical, VerticalScroll
 from ..events import Mount
 from ..message import Message
 from ..reactive import reactive, var
-from ..widget import AwaitMount, Widget
+from ..widget import Widget
 from ..widgets import Static, Tree
 
 TableOfContentsType: TypeAlias = "list[tuple[int, str, str | None]]"
+"""Information about the table of contents of a markdown document.
+
+The triples encode the level, the label, and the optional block id of each heading.
+"""
 
 
 class Navigator:
@@ -223,6 +227,7 @@ class MarkdownHorizontalRule(MarkdownBlock):
 class MarkdownParagraph(MarkdownBlock):
     """A paragraph Markdown block."""
 
+    SCOPED_CSS = False
     DEFAULT_CSS = """
     Markdown > MarkdownParagraph {
          margin: 0 0 1 0;
@@ -498,6 +503,8 @@ class MarkdownFence(MarkdownBlock):
         super().__init__(markdown)
 
     def compose(self) -> ComposeResult:
+        from rich.syntax import Syntax
+
         yield Static(
             Syntax(
                 self.code,
@@ -544,7 +551,19 @@ class Markdown(Widget):
         text-style: bold dim;
     }
     """
+
     COMPONENT_CLASSES = {"em", "strong", "s", "code_inline"}
+    """
+    These component classes target standard inline markdown styles.
+    Changing these will potentially break the standard markdown formatting.
+
+    | Class | Description |
+    | :- | :- |
+    | `code_inline` | Target text that is styled as inline code. |
+    | `em` | Target text that is emphasized inline. |
+    | `s` | Target text that is styled inline with strykethrough. |
+    | `strong` | Target text that is styled inline with strong. |
+    """
 
     BULLETS = ["\u25CF ", "▪ ", "‣ ", "• ", "⭑ "]
 
@@ -648,7 +667,7 @@ class Markdown(Widget):
         location, _, anchor = location.partition("#")
         return Path(location), anchor
 
-    def goto_anchor(self, anchor: str) -> None:
+    def goto_anchor(self, anchor: str) -> bool:
         """Try and find the given anchor in the current document.
 
         Args:
@@ -661,14 +680,18 @@ class Markdown(Widget):
 
             Note that the slugging method used is similar to that found on
             GitHub.
+
+        Returns:
+            True when the anchor was found in the current document, False otherwise.
         """
         if not self._table_of_contents or not isinstance(self.parent, Widget):
-            return
+            return False
         unique = TrackedSlugs()
         for _, title, header_id in self._table_of_contents:
             if unique.slug(title) == anchor:
                 self.parent.scroll_to_widget(self.query_one(f"#{header_id}"), top=True)
-                return
+                return True
+        return False
 
     async def load(self, path: Path) -> None:
         """Load a new Markdown document.
@@ -692,14 +715,14 @@ class Markdown(Widget):
         """Process an unhandled token.
 
         Args:
-            token: The token to handle.
+            token: The MarkdownIt token to handle.
 
         Returns:
             Either a widget to be added to the output, or `None`.
         """
         return None
 
-    def update(self, markdown: str) -> AwaitMount:
+    def update(self, markdown: str) -> AwaitComplete:
         """Update the document with new Markdown.
 
         Args:
@@ -849,12 +872,21 @@ class Markdown(Widget):
         self.post_message(
             Markdown.TableOfContentsUpdated(self, self._table_of_contents)
         )
-        with self.app.batch_update():
-            self.query("MarkdownBlock").remove()
-            return self.mount_all(output)
+        markdown_block = self.query("MarkdownBlock")
+
+        async def await_update() -> None:
+            """Update in a single batch."""
+
+            with self.app.batch_update():
+                await markdown_block.remove()
+                await self.mount_all(output)
+
+        return AwaitComplete(await_update())
 
 
 class MarkdownTableOfContents(Widget, can_focus_children=True):
+    """Displays a table of contents for a markdown document."""
+
     DEFAULT_CSS = """
     MarkdownTableOfContents {
         width: auto;
@@ -867,7 +899,8 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
     }
     """
 
-    table_of_contents = reactive["TableOfContentsType | None"](None, init=False)
+    table_of_contents = reactive[Optional[TableOfContentsType]](None, init=False)
+    """Underlying data to populate the table of contents widget."""
 
     def __init__(
         self,
@@ -886,7 +919,7 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
             classes: The CSS classes for the widget.
             disabled: Whether the widget is disabled or not.
         """
-        self.markdown = markdown
+        self.markdown: Markdown = markdown
         """The Markdown document associated with this table of contents."""
         super().__init__(name=name, id=id, classes=classes, disabled=disabled)
 
@@ -900,10 +933,10 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
 
     def watch_table_of_contents(self, table_of_contents: TableOfContentsType) -> None:
         """Triggered when the table of contents changes."""
-        self.set_table_of_contents(table_of_contents)
+        self.rebuild_table_of_contents(table_of_contents)
 
-    def set_table_of_contents(self, table_of_contents: TableOfContentsType) -> None:
-        """Set the table of contents.
+    def rebuild_table_of_contents(self, table_of_contents: TableOfContentsType) -> None:
+        """Rebuilds the tree representation of the table of contents data.
 
         Args:
             table_of_contents: Table of contents.
@@ -920,7 +953,8 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
                     node.allow_expand = True
                 else:
                     node = node.add(NUMERALS[level], expand=True)
-            node.add_leaf(f"[dim]{NUMERALS[level]}[/] {name}", {"block_id": block_id})
+            node_label = Text.assemble((f"{NUMERALS[level]} ", "dim"), name)
+            node.add_leaf(node_label, {"block_id": block_id})
 
     async def _on_tree_node_selected(self, message: Tree.NodeSelected) -> None:
         node_data = message.node.data
@@ -933,6 +967,8 @@ class MarkdownTableOfContents(Widget, can_focus_children=True):
 
 class MarkdownViewer(VerticalScroll, can_focus=True, can_focus_children=True):
     """A Markdown viewer widget."""
+
+    SCOPED_CSS = False
 
     DEFAULT_CSS = """
     MarkdownViewer {
@@ -985,12 +1021,12 @@ class MarkdownViewer(VerticalScroll, can_focus=True, can_focus_children=True):
 
     @property
     def document(self) -> Markdown:
-        """The Markdown document object."""
+        """The [`Markdown`][textual.widgets.Markdown] document widget."""
         return self.query_one(Markdown)
 
     @property
     def table_of_contents(self) -> MarkdownTableOfContents:
-        """The table of contents widget"""
+        """The [table of contents][textual.widgets.markdown.MarkdownTableOfContents] widget."""
         return self.query_one(MarkdownTableOfContents)
 
     def _on_mount(self, _: Mount) -> None:

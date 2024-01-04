@@ -25,13 +25,14 @@ Example app showing the widget:
 
 === "checkbox.tcss"
 
-    ```sass
+    ```css
     --8<-- "docs/examples/widgets/checkbox.tcss"
     ```
 
 
-## Reactive attributes
+## Reactive Attributes
 
+## Messages
 
 ## Bindings
 

@@ -9,6 +9,8 @@ A container widget that groups [`RadioButton`](./radiobutton.md)s together.
 
 ## Example
 
+### Simple example
+
 The example below shows two radio sets, one built using a collection of
 [radio buttons](./radiobutton.md), the other a collection of simple strings.
 
@@ -25,15 +27,11 @@ The example below shows two radio sets, one built using a collection of
 
 === "radio_set.tcss"
 
-    ```sass
+    ```css
     --8<-- "docs/examples/widgets/radio_set.tcss"
     ```
 
-## Messages
-
--  [RadioSet.Changed][textual.widgets.RadioSet.Changed]
-
-#### Example
+### Reacting to Changes in a Radio Set
 
 Here is an example of using the message to react to changes in a `RadioSet`:
 
@@ -50,9 +48,26 @@ Here is an example of using the message to react to changes in a `RadioSet`:
 
 === "radio_set_changed.tcss"
 
-    ```sass
+    ```css
     --8<-- "docs/examples/widgets/radio_set_changed.tcss"
     ```
+
+## Messages
+
+-  [RadioSet.Changed][textual.widgets.RadioSet.Changed]
+
+## Bindings
+
+The `RadioSet` widget defines the following bindings:
+
+::: textual.widgets.RadioSet.BINDINGS
+    options:
+      show_root_heading: false
+      show_root_toc_entry: false
+
+## Component Classes
+
+This widget has no component classes.
 
 ## See Also
 

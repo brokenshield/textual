@@ -228,7 +228,6 @@ class Key(InputEvent):
     Args:
         key: The key that was pressed.
         character: A printable character or ``None`` if it is not printable.
-
     Attributes:
         aliases: The aliases for the key, including the key itself.
     """
@@ -417,6 +416,19 @@ class MouseEvent(InputEvent, bubble=True):
         """
         if self.screen_offset not in widget.content_region:
             return None
+        return self.get_content_offset_capture(widget)
+
+    def get_content_offset_capture(self, widget: Widget) -> Offset:
+        """Get offset from a widget's content area.
+
+        This method works even if the offset is outside the widget content region.
+
+        Args:
+            widget: Widget receiving the event.
+
+        Returns:
+            An offset where the origin is at the top left of the content area.
+        """
         return self.offset - widget.gutter.top_left
 
     def _apply_offset(self, x: int, y: int) -> MouseEvent:
@@ -542,6 +554,26 @@ class Focus(Event, bubble=False):
 
 class Blur(Event, bubble=False):
     """Sent when a widget is blurred (un-focussed).
+
+    - [ ] Bubbles
+    - [ ] Verbose
+    """
+
+
+class AppFocus(Event, bubble=False):
+    """Sent when the app has focus.
+
+    Used by textual-web.
+
+    - [ ] Bubbles
+    - [ ] Verbose
+    """
+
+
+class AppBlur(Event, bubble=False):
+    """Sent when the app loses focus.
+
+    Used by textual-web.
 
     - [ ] Bubbles
     - [ ] Verbose

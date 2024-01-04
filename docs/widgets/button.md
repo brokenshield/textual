@@ -25,7 +25,7 @@ Clicking any of the non-disabled buttons in the example app below will result in
 
 === "button.tcss"
 
-    ```sass
+    ```css
     --8<-- "docs/examples/widgets/button.tcss"
     ```
 
@@ -40,6 +40,14 @@ Clicking any of the non-disabled buttons in the example app below will result in
 ## Messages
 
 - [Button.Pressed][textual.widgets.Button.Pressed]
+
+## Bindings
+
+This widget has no bindings.
+
+## Component Classes
+
+This widget has no component classes.
 
 ## Additional Notes
 
